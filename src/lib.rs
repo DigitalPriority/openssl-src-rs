@@ -369,7 +369,6 @@ impl Build {
             "powerpc-unknown-netbsd" => "BSD-generic32",
             "powerpc64-unknown-freebsd" => "BSD-ppc64",
             "powerpc64-unknown-linux-gnu" => "linux-ppc64",
-            "powerpc64-unknown-linux-gnuelfv2" => "linux-ppc64",
             "powerpc64-unknown-linux-musl" => "linux-ppc64",
             "powerpc64-chimera-linux-musl" => "linux-ppc64",
             "powerpc64le-unknown-freebsd" => "BSD-ppc64le",
@@ -378,7 +377,6 @@ impl Build {
             "powerpc64le-alpine-linux-musl" => "linux-ppc64le",
             "powerpc64le-chimera-linux-musl" => "linux-ppc64le",
             "riscv64gc-unknown-freebsd" => "BSD-riscv64",
-            "riscv64a23-unknown-linux-gnu" => "linux64-riscv64",
             "riscv64gc-unknown-linux-gnu" => "linux64-riscv64",
             "riscv64gc-unknown-linux-musl" => "linux64-riscv64",
             "riscv64-alpine-linux-musl" => "linux64-riscv64",
@@ -414,12 +412,8 @@ impl Build {
             "wasm32-unknown-unknown" => "gcc",
             "wasm32-wasi" => "gcc",
             "aarch64-apple-ios" => "ios64-cross",
-            "aarch64-apple-visionos" => "ios64-cross",
-            "x86_64-apple-ios" => "iossimulator-x86_64-xcrun",
-            "aarch64-apple-ios-sim" => "iossimulator-arm64-xcrun",
-            "aarch64-apple-visionos-sim" => "iossimulator-arm64-xcrun",
-            "aarch64-apple-ios-macabi" => "darwin64-arm64-cc",
-            "x86_64-apple-ios-macabi" => "darwin64-x86_64-cc",
+            "x86_64-apple-ios" => "iossimulator-xcrun",
+            "aarch64-apple-ios-sim" => "iossimulator-xcrun",
             "aarch64-unknown-linux-ohos" => "linux-aarch64",
             "armv7-unknown-linux-ohos" => "linux-generic32",
             "x86_64-unknown-linux-ohos" => "linux-x86_64",
@@ -493,7 +487,7 @@ impl Build {
                 }
 
                 // cargo-lipo specifies this but OpenSSL complains
-                if target.contains("apple-ios") || target.contains("apple-visionos") {
+                if target.contains("apple-ios") {
                     if arg == "-isysroot" {
                         is_isysroot = true;
                         continue;
@@ -514,27 +508,7 @@ impl Build {
                 configure.arg(arg);
             }
 
-            if target == "aarch64-apple-visionos" {
-                if let Some(ref isysr) = ios_isysroot {
-                    configure.env(
-                        "CC",
-                        &format!(
-                            "xcrun -sdk xros cc -isysroot {}",
-                            sanitize_sh(&Path::new(isysr))
-                        ),
-                    );
-                }
-            } else if target == "aarch64-apple-visionos-sim" {
-                if let Some(ref isysr) = ios_isysroot {
-                    configure.env(
-                        "CC",
-                        &format!(
-                            "xcrun -sdk xrsimulator cc -isysroot {}",
-                            sanitize_sh(&Path::new(isysr))
-                        ),
-                    );
-                }
-            } else if os.contains("iossimulator") {
+            if os.contains("iossimulator") {
                 if let Some(ref isysr) = ios_isysroot {
                     configure.env(
                         "CC",
@@ -785,38 +759,6 @@ fn sanitize_sh(path: &Path) -> String {
     }
 }
 
-// Rust targets whose selected OpenSSL Configuration target adds `-latomic`;
-// based on openssl/Configurations/10-main.conf.
-const TARGETS_NEEDING_LATOMIC: &[&str] = &[
-    // linux-armv4 inherits linux-latomic.
-    "arm-linux-androideabi",
-    "armv7-linux-androideabi",
-    "arm-unknown-linux-gnueabi",
-    "arm-unknown-linux-gnueabihf",
-    "arm-unknown-linux-musleabi",
-    "arm-unknown-linux-musleabihf",
-    "arm-chimera-linux-musleabihf",
-    "armv5te-unknown-linux-gnueabi",
-    "armv5te-unknown-linux-musleabi",
-    "armv7-unknown-linux-gnueabi",
-    "armv7-unknown-linux-musleabi",
-    "armv7-unknown-linux-gnueabihf",
-    "armv7-unknown-linux-musleabihf",
-    "armv7-alpine-linux-musleabihf",
-    "armv7-chimera-linux-musleabihf",
-    // linux-mips32 inherits linux-latomic.
-    "mips-unknown-linux-gnu",
-    "mips-unknown-linux-musl",
-    "mipsel-unknown-linux-gnu",
-    "mipsel-unknown-linux-musl",
-    // linux-ppc inherits linux-latomic.
-    "powerpc-unknown-linux-gnu",
-    "powerpc-unknown-linux-gnuspe",
-    "powerpc-chimera-linux-musl",
-    // linux64-sparcv9 adds -latomic directly.
-    "sparc64-unknown-linux-gnu",
-];
-
 impl Artifacts {
     pub fn include_dir(&self) -> &Path {
         &self.include_dir
@@ -830,17 +772,10 @@ impl Artifacts {
         &self.libs
     }
 
-    pub fn needs_latomic(&self) -> bool {
-        TARGETS_NEEDING_LATOMIC.contains(&self.target.as_str())
-    }
-
     pub fn print_cargo_metadata(&self) {
         println!("cargo:rustc-link-search=native={}", self.lib_dir.display());
         for lib in self.libs.iter() {
             println!("cargo:rustc-link-lib=static={}", lib);
-        }
-        if self.needs_latomic() {
-            println!("cargo:rustc-link-lib=atomic");
         }
         println!("cargo:include={}", self.include_dir.display());
         println!("cargo:lib={}", self.lib_dir.display());
